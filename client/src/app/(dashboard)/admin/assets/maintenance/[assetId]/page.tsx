@@ -1,0 +1,651 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import {
+    type FormEvent,
+    useEffect,
+    useState,
+    useMemo,
+    useCallback,
+} from "react";
+import { CrudModal } from "@/components/ui/CrudModal";
+import { maintenanceService } from "@/features/assets/services/maintenance.service";
+import type {
+    AssetMaintenanceLog,
+    MaintenanceAssetDetail,
+    CreateMaintenanceLogPayload,
+    UpdateMaintenanceLogPayload,
+} from "@/features/assets/types/maintenance";
+import type {
+    AssetStatus,
+    MaintenanceStatus,
+} from "@/features/rooms/types/rooms";
+import { ApiError } from "@/lib/api/client";
+
+function AssetIcon({ className }: { className?: string }) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className={className}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M12 3l8 4-8 4-8-4 8-4z" />
+            <path d="M4 7v6l8 4 8-4V7" />
+        </svg>
+    );
+}
+
+function getErrorMessage(error: unknown) {
+    if (error instanceof ApiError) {
+        return error.message;
+    }
+    return "Terjadi kesalahan saat memproses data.";
+}
+
+function assetStatusBadgeClass(status: AssetStatus) {
+    if (status === "GOOD") return "bg-emerald-100 text-emerald-800";
+    if (status === "MAINTENANCE") return "bg-amber-100 text-amber-800";
+    return "bg-rose-100 text-rose-800";
+}
+
+function assetStatusLabel(status: AssetStatus) {
+    if (status === "GOOD") return "Baik";
+    if (status === "MAINTENANCE") return "Maintenance";
+    return "Rusak";
+}
+
+function maintenanceStatusBadgeClass(status: MaintenanceStatus) {
+    if (status === "PROCESS" || status === "PENDING")
+        return "bg-amber-100 text-amber-800";
+    return "bg-emerald-100 text-emerald-800";
+}
+
+function maintenanceStatusLabel(status: MaintenanceStatus) {
+    if (status === "PENDING") return "Menunggu";
+    if (status === "PROCESS") return "Process";
+    return "Done";
+}
+
+function formatDate(dateString: string) {
+    return new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(new Date(dateString));
+}
+
+export default function AssetMaintenancePage() {
+    const params = useParams();
+    const assetId = params.assetId as string;
+
+    const [assetDetail, setAssetDetail] =
+        useState<MaintenanceAssetDetail | null>(null);
+    const [logs, setLogs] = useState<AssetMaintenanceLog[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [fetchError, setFetchError] = useState("");
+    const [feedbackMessage, setFeedbackMessage] = useState("");
+
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [editLogId, setEditLogId] = useState<string | null>(null);
+    const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
+
+    const [formDetails, setFormDetails] = useState("");
+    const [formStatus, setFormStatus] = useState<MaintenanceStatus>("PENDING");
+    const [formAssetStatus, setFormAssetStatus] = useState<AssetStatus | "">(
+        "",
+    );
+
+    const [formError, setFormError] = useState("");
+
+    const loadData = useCallback(async () => {
+        try {
+            const res = await maintenanceService.getLogsByAssetId(assetId);
+            setAssetDetail(res.asset);
+            setLogs(res.logs);
+            setFetchError("");
+        } catch (error) {
+            setFetchError(getErrorMessage(error));
+        } finally {
+            setIsLoading(false);
+        }
+    }, [assetId]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            void loadData();
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [loadData]);
+
+    const editLog = useMemo(
+        () => logs.find((l) => l.id === editLogId) ?? null,
+        [logs, editLogId],
+    );
+    const deleteLog = useMemo(
+        () => logs.find((l) => l.id === deleteLogId) ?? null,
+        [logs, deleteLogId],
+    );
+
+    const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setFormError("");
+        setFeedbackMessage("");
+        setIsSubmitting(true);
+
+        try {
+            const payload: CreateMaintenanceLogPayload = {
+                details: formDetails,
+                status: formStatus,
+            };
+            if (formAssetStatus) payload.assetStatus = formAssetStatus;
+
+            const res = await maintenanceService.createLog(assetId, payload);
+            setFeedbackMessage(res.message);
+            setIsCreateModalOpen(false);
+            setIsLoading(true);
+            await loadData();
+        } catch (error) {
+            setFormError(getErrorMessage(error));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!editLogId) return;
+
+        setFormError("");
+        setFeedbackMessage("");
+        setIsSubmitting(true);
+
+        try {
+            const payload: UpdateMaintenanceLogPayload = {
+                assetId,
+                details: formDetails,
+                status: formStatus,
+            };
+            if (formAssetStatus) payload.assetStatus = formAssetStatus;
+
+            const res = await maintenanceService.updateLog(editLogId, payload);
+            setFeedbackMessage(res.message);
+            setEditLogId(null);
+            setIsLoading(true);
+            await loadData();
+        } catch (error) {
+            setFormError(getErrorMessage(error));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteLogId) return;
+        setFormError("");
+        setFeedbackMessage("");
+        setIsSubmitting(true);
+
+        try {
+            const res = await maintenanceService.deleteLog(deleteLogId);
+            setFeedbackMessage(res.message);
+            setDeleteLogId(null);
+            setIsLoading(true);
+            await loadData();
+        } catch (error) {
+            setFormError(getErrorMessage(error));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openCreateModal = () => {
+        setFormError("");
+        setFeedbackMessage("");
+        setFormDetails("");
+        setFormStatus("PENDING");
+        setFormAssetStatus(assetDetail?.status || "");
+        setIsCreateModalOpen(true);
+    };
+
+    const openEditModal = (log: AssetMaintenanceLog) => {
+        setFormError("");
+        setFeedbackMessage("");
+        setFormDetails(log.details);
+        setFormStatus(log.status);
+        setFormAssetStatus(assetDetail?.status || "");
+        setEditLogId(log.id);
+    };
+
+    return (
+        <section className="space-y-5">
+            <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <div className="mb-2">
+                        <Link
+                            href="/admin/rooms"
+                            className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                            &larr; Kembali ke Daftar Kamar
+                        </Link>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-900">
+                        Kelola Maintenance Log
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm text-gray-500 md:text-base">
+                        Catat riwayat perbaikan dan perbarui kondisi aset ini
+                        secara manual.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={openCreateModal}
+                        className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        Tambah Log Baru
+                    </button>
+                </div>
+            </header>
+
+            {assetDetail && (
+                <section className="flex gap-4">
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm min-w-[250px]">
+                        <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Asset</p>
+                        <p className="mt-1 flex items-center gap-2 text-lg font-semibold text-gray-900">
+                            <AssetIcon className="h-5 w-5 text-gray-500" />
+                            {assetDetail.name}
+                        </p>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm min-w-[200px]">
+                        <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                            Status Aset Terkini
+                        </p>
+                        <div className="mt-1">
+                            <span
+                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${assetStatusBadgeClass(assetDetail.status)}`}
+                            >
+                                {assetStatusLabel(assetDetail.status)}
+                            </span>
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            {fetchError && (
+                <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {fetchError}
+                </section>
+            )}
+            {feedbackMessage && (
+                <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                    {feedbackMessage}
+                </section>
+            )}
+
+            <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                {isLoading ? (
+                    <div className="px-4 py-10 text-center text-sm text-gray-500">
+                        Memuat riwayat maintenance...
+                    </div>
+                ) : (
+                    <table className="min-w-full border-collapse">
+                        <thead>
+                            <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                                    Status Maintenance
+                                </th>
+                                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                                    Detail Pekerjaan
+                                </th>
+                                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {logs.length === 0 ? (
+                                <tr>
+                                    <td
+                                        colSpan={4}
+                                        className="px-5 py-8 text-center text-sm text-gray-500"
+                                    >
+                                        Belum ada riwayat perbaikan untuk aset
+                                        ini.
+                                    </td>
+                                </tr>
+                            ) : (
+                                logs.map((log) => (
+                                    <tr
+                                        key={log.id}
+                                        className="transition hover:bg-gray-50 align-top"
+                                    >
+                                        <td className="px-5 py-4 text-sm text-gray-900">
+                                            {formatDate(log.createdAt)}
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <span
+                                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${maintenanceStatusBadgeClass(log.status)}`}
+                                            >
+                                                {maintenanceStatusLabel(
+                                                    log.status,
+                                                )}
+                                            </span>
+                                        </td>
+                                        <td className="px-5 py-4 text-sm text-gray-700">
+                                            {log.details}
+                                        </td>
+                                        <td className="px-5 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        openEditModal(log)
+                                                    }
+                                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                                >Edit</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setDeleteLogId(log.id)
+                                                    }
+                                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                                                >Delete</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                )}
+            </section>
+
+            {/* CREATE MODAL */}
+            {isCreateModalOpen && (
+                <CrudModal
+                    title="Tambah Maintenance Log"
+                    description="Catat proses perbaikan dan perbarui kondisi aset ini."
+                    onClose={() => setIsCreateModalOpen(false)}
+                >
+                    <form onSubmit={handleCreateSubmit} className="space-y-4">
+                        {formError && (
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                                {formError}
+                            </div>
+                        )}
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                Detail Perbaikan
+                            </span>
+                            <textarea
+                                value={formDetails}
+                                onChange={(e) => setFormDetails(e.target.value)}
+                                required
+                                className="rounded-lg border border-gray-300 p-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none min-h-[100px]"
+                                placeholder="Deskripsikan kerusakan dan tindakan perbaikan..."
+                            />
+                        </label>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <label className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                    Status Maintenance
+                                </span>
+                                <select
+                                    value={formStatus}
+                                    onChange={(e) =>
+                                        setFormStatus(
+                                            e.target.value as MaintenanceStatus,
+                                        )
+                                    }
+                                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                    <option
+                                        value="PENDING"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Menunggu
+                                    </option>
+                                    <option
+                                        value="PROCESS"
+                                        className="text-gray-900 bg-white"
+                                    >Process</option>
+                                    <option
+                                        value="FINISHED"
+                                        className="text-gray-900 bg-white"
+                                    >Done</option>
+                                </select>
+                            </label>
+
+                            <label className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                    Update Kondisi Aset
+                                </span>
+                                <select
+                                    value={formAssetStatus}
+                                    onChange={(e) =>
+                                        setFormAssetStatus(
+                                            e.target.value as AssetStatus | "",
+                                        )
+                                    }
+                                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                    <option
+                                        value=""
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        -- Jangan Ubah --
+                                    </option>
+                                    <option
+                                        value="GOOD"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Baik
+                                    </option>
+                                    <option
+                                        value="MAINTENANCE"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Maintenance
+                                    </option>
+                                    <option
+                                        value="BROKEN"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Rusak
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className="pt-2 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsCreateModalOpen(false)}
+                                className="h-10 px-4 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            >Cancel</button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="h-10 px-4 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            >
+                                {isSubmitting ? "Saving..." : "Save"}
+                            </button>
+                        </div>
+                    </form>
+                </CrudModal>
+            )}
+
+            {/* EDIT MODAL */}
+            {editLogId && editLog && (
+                <CrudModal
+                    title="Edit Maintenance Log"
+                    description="Ubah detail perbaikan atau statusnya."
+                    onClose={() => setEditLogId(null)}
+                >
+                    <form onSubmit={handleEditSubmit} className="space-y-4">
+                        {formError && (
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                                {formError}
+                            </div>
+                        )}
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                Detail Perbaikan
+                            </span>
+                            <textarea
+                                value={formDetails}
+                                onChange={(e) => setFormDetails(e.target.value)}
+                                required
+                                className="rounded-lg border border-gray-300 p-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none min-h-[100px]"
+                            />
+                        </label>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <label className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                    Status Maintenance
+                                </span>
+                                <select
+                                    value={formStatus}
+                                    onChange={(e) =>
+                                        setFormStatus(
+                                            e.target.value as MaintenanceStatus,
+                                        )
+                                    }
+                                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                    <option
+                                        value="PENDING"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Menunggu
+                                    </option>
+                                    <option
+                                        value="PROCESS"
+                                        className="text-gray-900 bg-white"
+                                    >Process</option>
+                                    <option
+                                        value="FINISHED"
+                                        className="text-gray-900 bg-white"
+                                    >Done</option>
+                                </select>
+                            </label>
+
+                            <label className="flex flex-col gap-1">
+                                <span className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                                    Update Kondisi Aset
+                                </span>
+                                <select
+                                    value={formAssetStatus}
+                                    onChange={(e) =>
+                                        setFormAssetStatus(
+                                            e.target.value as AssetStatus | "",
+                                        )
+                                    }
+                                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-900 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                    <option
+                                        value=""
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        -- Jangan Ubah --
+                                    </option>
+                                    <option
+                                        value="GOOD"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Baik
+                                    </option>
+                                    <option
+                                        value="MAINTENANCE"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Maintenance
+                                    </option>
+                                    <option
+                                        value="BROKEN"
+                                        className="text-gray-900 bg-white"
+                                    >
+                                        Rusak
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className="pt-2 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setEditLogId(null)}
+                                className="h-10 px-4 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            >Cancel</button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="h-10 px-4 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                            >
+                                {isSubmitting
+                                    ? "Saving..."
+                                    : "Save Changes"}
+                            </button>
+                        </div>
+                    </form>
+                </CrudModal>
+            )}
+
+            {/* DELETE MODAL */}
+            {deleteLogId && deleteLog && (
+                <CrudModal
+                    title="Hapus Maintenance Log"
+                    description="Riwayat ini akan dihapus permanen. Status aset tidak akan dikembalikan secara otomatis."
+                    onClose={() => setDeleteLogId(null)}
+                >
+                    <div className="space-y-4">
+                        {formError && (
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                                {formError}
+                            </div>
+                        )}
+
+                        <p className="text-sm text-gray-700">
+                            Apakah Anda yakin ingin menghapus log perbaikan ini?
+                        </p>
+                        <div className="rounded-lg bg-gray-50 p-3 text-sm italic text-gray-600">
+                            &quot;{deleteLog.details}&quot;
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteLogId(null)}
+                                className="h-10 px-4 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            >Cancel</button>
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={handleDeleteConfirm}
+                                className="h-10 px-4 rounded-lg bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                            >
+                                {isSubmitting ? "Deleting..." : "Yes, Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </CrudModal>
+            )}
+        </section>
+    );
+}

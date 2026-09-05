@@ -1,0 +1,68 @@
+-- +goose Up
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TYPE role_enum AS ENUM ('ADMIN', 'OPERATOR', 'OCCUPANT');
+CREATE TYPE profile_status_enum AS ENUM ('ACTIVE', 'INACTIVE');
+CREATE TYPE room_status_enum AS ENUM ('VACANT', 'OCCUPIED', 'MAINTENANCE');
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role role_enum NOT NULL DEFAULT 'OCCUPANT',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE occupant_details (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(255),
+    address TEXT,
+    occupation VARCHAR(255),
+    id_card_number VARCHAR(255),
+    emergency_contact VARCHAR(255),
+    status profile_status_enum NOT NULL DEFAULT 'ACTIVE',
+    move_in_date TIMESTAMP WITH TIME ZONE,
+    move_out_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE rooms (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL UNIQUE,
+    price DECIMAL(10, 2) NOT NULL,
+    status room_status_enum NOT NULL DEFAULT 'VACANT',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE asset_masters (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE assets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    asset_master_id UUID NOT NULL REFERENCES asset_masters(id) ON DELETE CASCADE,
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    details TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'GOOD',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS assets;
+DROP TABLE IF EXISTS asset_masters;
+DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS occupant_details;
+DROP TABLE IF EXISTS users;
+DROP TYPE IF EXISTS room_status_enum;
+DROP TYPE IF EXISTS profile_status_enum;
+DROP TYPE IF EXISTS role_enum;

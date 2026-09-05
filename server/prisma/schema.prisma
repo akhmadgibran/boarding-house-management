@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  password        String
+  role            Role
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  complaints      Complaint[]
+  invoices        Invoice[]
+  occupantDetails OccupantDetails?
+  operatorDetails OperatorDetails?
+  payments        Payment[]
+
+  @@map("user")
+}
+
+model OccupantDetails {
+  id          String             @id @default(uuid())
+  userId      String             @unique
+  name        String
+  phoneNumber String
+  address     String
+  occupation  OccupantOccupation @default(BEKERJA)
+  status      ProfileStatus
+  moveInDate  DateTime?
+  moveOutDate DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        User               @relation(fields: [userId], references: [id])
+
+  @@map("occupantdetails")
+}
+
+model OperatorDetails {
+  id          String        @id @default(uuid())
+  userId      String        @unique
+  name        String
+  phoneNumber String
+  address     String
+  status      ProfileStatus
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id])
+
+  @@map("operatordetails")
+}
+
+model Room {
+  id       String     @id @default(uuid())
+  name     String     @unique
+  price    Float      @default(0)
+  status   RoomStatus
+  assets   Asset[]
+  invoices Invoice[]
+
+  @@map("room")
+}
+
+model AssetMaster {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  assets Asset[]
+
+  @@map("assetmaster")
+}
+
+model Asset {
+  id               String                @id @default(uuid())
+  assetMasterId    String
+  roomId           String
+  name             String
+  details          String                @db.Text
+  status           AssetStatus
+  assetMaster      AssetMaster           @relation(fields: [assetMasterId], references: [id])
+  room             Room                  @relation(fields: [roomId], references: [id])
+  maintenanceLog   AssetMaintenanceLog[]
+  complaints       Complaint[]
+  financialRecords FinancialRecord[]
+
+  @@unique([roomId, assetMasterId, name])
+  @@index([assetMasterId], map: "asset_assetMasterId_fkey")
+  @@map("asset")
+}
+
+model AssetMaintenanceLog {
+  id        String            @id @default(uuid())
+  assetId   String
+  details   String            @db.Text
+  status    MaintenanceStatus
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  asset     Asset             @relation(fields: [assetId], references: [id])
+
+  @@index([assetId], map: "assetmaintenancelog_assetId_fkey")
+  @@map("assetmaintenancelog")
+}
+
+model Complaint {
+  id           String            @id @default(uuid())
+  category     ComplaintCategory
+  detail       String            @db.Text
+  status       ComplaintStatus   @default(PENDING)
+  reportedById String
+  assetId      String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  asset        Asset?            @relation(fields: [assetId], references: [id])
+  reportedBy   User              @relation(fields: [reportedById], references: [id])
+
+  @@index([assetId], map: "complaint_assetId_fkey")
+  @@index([reportedById], map: "complaint_reportedById_fkey")
+  @@map("complaint")
+}
+
+model Invoice {
+  id                   String           @id @default(uuid())
+  importCode           String?          @unique
+  roomId               String
+  occupantId           String?
+  priceApplied         Float
+  paidNominal          Float            @default(0)
+  periodStart          DateTime
+  periodEnd            DateTime
+  note                 String?          @db.Text
+  status               PaymentStatus    @default(UNPAID)
+  isDpReservation      Boolean          @default(false)
+  waitingForRoomVacant Boolean          @default(false)
+  priorOccupantId      String?
+  occupant             User?            @relation(fields: [occupantId], references: [id])
+  room                 Room             @relation(fields: [roomId], references: [id])
+  invoicePayments      InvoicePayment[]
+
+  @@index([occupantId], map: "invoice_occupantId_fkey")
+  @@index([roomId], map: "invoice_roomId_fkey")
+  @@map("invoice")
+}
+
+model Payment {
+  id               String            @id @default(uuid())
+  importCode       String?           @unique
+  occupantId       String
+  amount           Float
+  paymentDate      DateTime          @default(now())
+  paymentMethod    PaymentMethod
+  note             String?           @db.Text
+  financialRecords FinancialRecord[]
+  invoicePayments  InvoicePayment[]
+  occupant         User              @relation(fields: [occupantId], references: [id])
+
+  @@index([occupantId], map: "payment_occupantId_fkey")
+  @@map("payment")
+}
+
+model InvoicePayment {
+  id            String  @id @default(uuid())
+  invoiceId     String
+  paymentId     String
+  amountApplied Float
+  invoice       Invoice @relation(fields: [invoiceId], references: [id])
+  payment       Payment @relation(fields: [paymentId], references: [id])
+
+  @@unique([invoiceId, paymentId, amountApplied])
+  @@index([paymentId], map: "invoicepayment_paymentId_fkey")
+  @@map("invoicepayment")
+}
+
+model FinancialRecord {
+  id              String           @id @default(uuid())
+  type            TransactionType
+  amount          Float
+  description     String           @db.Text
+  date            DateTime         @default(now())
+  paymentId       String?
+  expenseCategory ExpenseCategory?
+  assetId         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  asset           Asset?           @relation(fields: [assetId], references: [id])
+  payment         Payment?         @relation(fields: [paymentId], references: [id])
+
+  @@unique([type, expenseCategory, amount, description(length: 191), date])
+  @@index([assetId], map: "financialrecord_assetId_fkey")
+  @@index([paymentId], map: "financialrecord_paymentId_fkey")
+  @@map("financialrecord")
+}
+
+model RoomOccupancySnapshot {
+  id            String   @id @default(uuid())
+  year          Int
+  month         Int
+  occupiedRooms Int
+  totalRooms    Int
+  snapshotDate  DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([year, month])
+  @@map("roomoccupancysnapshot")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  OCCUPANT
+}
+
+enum ProfileStatus {
+  ACTIVE
+  DEACTIVE
+}
+
+enum RoomStatus {
+  OCCUPIED
+  VACANT
+}
+
+enum AssetStatus {
+  BROKEN
+  GOOD
+  MAINTENANCE
+}
+
+enum MaintenanceStatus {
+  PROCESS
+  PENDING
+  FINISHED
+}
+
+enum ComplaintCategory {
+  ASSET
+  OTHERS
+}
+
+enum ComplaintStatus {
+  PENDING
+  PROCESSED
+  RESOLVED
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  NOT_FULLY_PAID
+}
+
+enum OccupantOccupation {
+  BEKERJA
+  KULIAH
+}
+
+enum PaymentMethod {
+  TRANSFER
+  QRIS
+  E_WALLET
+  CASH
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum ExpenseCategory {
+  ASSET_REPAIR
+  LISTRIK
+  GAJI_PRT
+  OPS_DAPUR
+  BTN
+  INTERNET
+  LAIN_LAIN
+}

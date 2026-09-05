@@ -1,0 +1,3 @@
+-- This migration is now a no-op.
+-- The timestamp columns for User, OccupantDetails, and OperatorDetails
+-- were already added in the previous migration (20260423032503_add_user_profile_timestamps).

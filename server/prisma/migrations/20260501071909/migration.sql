@@ -1,0 +1,1 @@
+-- This migration is blank because its changes were already applied in the previous migration `20260430045823_remove_others_expense_category`

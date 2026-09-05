@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb; /* gray-50 */
+  --foreground: #111827; /* gray-900 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  /* Semantic Colors for Pragmatic Comfort */
+  --color-primary: var(--color-blue-600);
+  --color-success: var(--color-emerald-500);
+  --color-warning: var(--color-amber-500);
+  --color-danger: var(--color-rose-500);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Optional: Provide minimal dark mode or lock to light mode if preferred for Admin panels */
+    --background: #111827;
+    --foreground: #f9fafb;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.auth-fade-in {
+  animation: auth-rise 0.55s ease-out both;
+}
+
+.auth-delay-1 {
+  animation-delay: 0.08s;
+}
+
+.auth-delay-2 {
+  animation-delay: 0.16s;
+}
+
+.auth-grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(203, 213, 225, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(203, 213, 225, 0.35) 1px, transparent 1px);
+  background-size: 38px 38px;
+}
+
+.auth-orb-blue {
+  background: radial-gradient(circle, rgba(186, 230, 253, 0.8) 0%, rgba(186, 230, 253, 0) 72%);
+  animation: auth-float 7s ease-in-out infinite;
+}
+
+.auth-orb-amber {
+  background: radial-gradient(circle, rgba(253, 230, 138, 0.8) 0%, rgba(253, 230, 138, 0) 72%);
+  animation: auth-float 8s ease-in-out infinite;
+}
