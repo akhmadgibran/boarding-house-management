@@ -35,13 +35,13 @@ func (u *roomUseCase) ListRooms(ctx context.Context) ([]repository.ListRoomsWith
 	return rooms, nil
 }
 
-func (u *roomUseCase) GetRoom(ctx context.Context, id uuid.UUID) (repository.Room, error) {
-	room, err := u.repo.GetRoom(ctx, id)
+func (u *roomUseCase) GetRoomDetails(ctx context.Context, id uuid.UUID) (repository.GetRoomDetailsRow, error) {
+	room, err := u.repo.GetRoomDetails(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return repository.Room{}, errors.New("room not found")
+			return repository.GetRoomDetailsRow{}, errors.New("room not found")
 		}
-		return repository.Room{}, errors.New("failed to fetch room details")
+		return repository.GetRoomDetailsRow{}, errors.New("failed to fetch room details")
 	}
 	return room, nil
 }

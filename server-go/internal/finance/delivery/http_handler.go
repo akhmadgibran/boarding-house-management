@@ -40,11 +40,24 @@ func (h *FinanceHandler) GetAllFinancialRecords(w http.ResponseWriter, r *http.R
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var data interface{} = res
-	if res == nil {
-		data = []interface{}{}
+	mapped := make([]map[string]interface{}, 0)
+	for _, rec := range res {
+		mapped = append(mapped, map[string]interface{}{
+			"id": rec.ID,
+			"type": rec.Type,
+			"amount": func() float64 { v, _ := rec.Amount.Float64Value(); return v.Float64 }(),
+			"description": rec.Description.String,
+			"date": rec.Date.Time,
+			"paymentId": rec.PaymentID,
+			"assetId": rec.AssetID,
+			"expenseCategory": rec.ExpenseCategory,
+			"paymentImportCode": rec.PaymentImportCode.String,
+			"assetName": rec.AssetName.String,
+			"createdAt": rec.CreatedAt.Time,
+			"updatedAt": rec.UpdatedAt.Time,
+		})
 	}
-	response.Success(w, http.StatusOK, "Financial records retrieved", map[string]interface{}{"records": data})
+	response.Success(w, http.StatusOK, "Financial records retrieved", map[string]interface{}{"records": mapped})
 }
 
 func floatToNumeric(f float64) pgtype.Numeric {

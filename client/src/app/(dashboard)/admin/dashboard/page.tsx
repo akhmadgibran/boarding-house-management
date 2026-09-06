@@ -615,7 +615,11 @@ export default function AdminDashboardPage() {
     }
 
     if (!summary) {
-        return null;
+        return (
+            <div className="flex h-96 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <p className="text-gray-500">Data summary tidak tersedia.</p>
+            </div>
+        );
     }
 
     return (

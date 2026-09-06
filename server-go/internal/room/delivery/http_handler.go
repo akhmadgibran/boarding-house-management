@@ -80,7 +80,7 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "Invalid room ID format")
 		return
 	}
-	room, err := h.roomUC.GetRoom(r.Context(), id)
+	room, err := h.roomUC.GetRoomDetails(r.Context(), id)
 	if err != nil {
 		if err.Error() == "room not found" {
 			response.Error(w, http.StatusNotFound, err.Error())

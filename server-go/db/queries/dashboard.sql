@@ -32,3 +32,6 @@ SELECT c.id, c.category::text as category, c.status::text as status, c.created_a
 FROM complaints c
 LEFT JOIN occupant_details od ON c.reported_by_id = od.user_id
 ORDER BY c.created_at DESC LIMIT 5;
+
+-- name: GetTotalOutstanding :one
+SELECT COALESCE(SUM(price_applied - paid_nominal), 0)::numeric FROM invoices WHERE status != 'PAID';

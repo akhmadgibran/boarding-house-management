@@ -64,11 +64,37 @@ func (h *ComplaintHandler) GetAllComplaints(w http.ResponseWriter, r *http.Reque
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var data interface{} = res
-	if res == nil {
-		data = []interface{}{}
+	
+	mapped := make([]map[string]interface{}, 0)
+	for _, rec := range res {
+		mapped = append(mapped, map[string]interface{}{
+			"id": rec.ID,
+			"reportedById": rec.ReportedByID,
+			"assetId": rec.AssetID,
+			"category": rec.Category,
+			"detail": rec.Detail,
+			"status": rec.Status,
+			"createdAt": rec.CreatedAt.Time,
+			"updatedAt": rec.UpdatedAt.Time,
+						"asset": func() interface{} {
+				if !rec.AssetID.Valid { return nil }
+				return map[string]interface{}{
+					"id": rec.AssetID,
+					"name": rec.AssetName.String,
+					"room": map[string]interface{}{
+						"name": rec.RoomName.String,
+					},
+				}
+			}(),
+			"reportedBy": map[string]interface{}{
+				"email": rec.ReporterEmail,
+				"occupantDetails": map[string]interface{}{
+					"name": rec.ReporterName.String,
+				},
+			},
+		})
 	}
-	response.Success(w, http.StatusOK, "Complaints retrieved", map[string]interface{}{"complaints": data})
+	response.Success(w, http.StatusOK, "Complaints retrieved", map[string]interface{}{"complaints": mapped})
 }
 
 func (h *ComplaintHandler) GetOccupantComplaints(w http.ResponseWriter, r *http.Request) {

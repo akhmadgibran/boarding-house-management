@@ -18,6 +18,7 @@ type Querier interface {
 	DeleteRoom(ctx context.Context, id uuid.UUID) error
 	GetActiveRoomOccupancy(ctx context.Context, roomID uuid.UUID) (Invoice, error)
 	GetRoom(ctx context.Context, id uuid.UUID) (Room, error)
+	GetRoomDetails(ctx context.Context, id uuid.UUID) (GetRoomDetailsRow, error)
 	GetWaitingReservation(ctx context.Context, roomID uuid.UUID) (Invoice, error)
 	ListRooms(ctx context.Context) ([]Room, error)
 	ListRoomsWithAssets(ctx context.Context) ([]ListRoomsWithAssetsRow, error)

@@ -47,7 +47,14 @@ func (h *DashboardHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	})
 	ti, _ := h.repo.GetTotalIncome(ctx)
 	te, _ := h.repo.GetTotalExpense(ctx)
-	
+	to, _ := h.repo.GetTotalOutstanding(ctx)
+
+	// Calculate ending balance: Total Income - Total Expense
+	var endingBalance int64 = 0
+	if ti.Int != nil && te.Int != nil {
+		endingBalance = ti.Int.Int64() - te.Int.Int64()
+	}
+
 	acts, _ := h.repo.GetRecentActivities(ctx)
 	var recentActs []map[string]interface{}
 	for _, a := range acts {
@@ -78,13 +85,18 @@ func (h *DashboardHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		recentComps = []map[string]interface{}{}
 	}
 
-	res := map[string]interface{}{
-		"totalRooms": tr,
-		"occupiedRooms": or,
-		"totalActiveTenants": at,
-		"monthlyIncome": mi.Int,
-		"totalIncome": ti.Int,
-		"totalExpense": te.Int,
+		res := map[string]interface{}{
+		"summary": map[string]interface{}{
+			"totalRooms": tr,
+			"occupiedRooms": or,
+			"totalActiveTenants": at,
+			"monthlyIncome": mi.Int,
+			"totalIncome": ti.Int,
+			"totalExpense": te.Int,
+			"totalOutstanding": to.Int,
+			"endingBalance": endingBalance,
+			// The frontend computes endingBalance manually anyway, or maybe expects it here
+		},
 		"recentActivities": recentActs,
 		"recentComplaints": recentComps,
 	}

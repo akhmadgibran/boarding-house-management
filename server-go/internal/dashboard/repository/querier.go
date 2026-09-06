@@ -18,6 +18,7 @@ type Querier interface {
 	GetRecentComplaints(ctx context.Context) ([]GetRecentComplaintsRow, error)
 	GetTotalExpense(ctx context.Context) (pgtype.Numeric, error)
 	GetTotalIncome(ctx context.Context) (pgtype.Numeric, error)
+	GetTotalOutstanding(ctx context.Context) (pgtype.Numeric, error)
 	GetTotalRooms(ctx context.Context) (int64, error)
 }
 

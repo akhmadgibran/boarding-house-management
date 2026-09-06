@@ -161,6 +161,17 @@ func (q *Queries) GetTotalIncome(ctx context.Context) (pgtype.Numeric, error) {
 	return column_1, err
 }
 
+const getTotalOutstanding = `-- name: GetTotalOutstanding :one
+SELECT COALESCE(SUM(price_applied - paid_nominal), 0)::numeric FROM invoices WHERE status != 'PAID'
+`
+
+func (q *Queries) GetTotalOutstanding(ctx context.Context) (pgtype.Numeric, error) {
+	row := q.db.QueryRow(ctx, getTotalOutstanding)
+	var column_1 pgtype.Numeric
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getTotalRooms = `-- name: GetTotalRooms :one
 SELECT COUNT(*) FROM rooms
 `

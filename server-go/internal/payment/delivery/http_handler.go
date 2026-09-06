@@ -85,9 +85,10 @@ func (h *PaymentHandler) ListFinancialRecords(w http.ResponseWriter, r *http.Req
 		mapped = append(mapped, map[string]interface{}{
 			"id": rec.ID,
 			"type": rec.Type,
-			"amount": rec.Amount,
-			"description": rec.Description,
-			"date": rec.Date.Time,
+			"amount": func() float64 { v, _ := rec.Amount.Float64Value(); return v.Float64 }(),
+			"description": rec.Description.String,
+			"paymentDate": rec.Date.Time,
+			"paymentMethod": "TRANSFER", // Dummy fallback, mapping will handle it
 			"paymentId": formatUUID(rec.PaymentID),
 			"assetId": formatUUID(rec.AssetID),
 			"expenseCategory": rec.ExpenseCategory,
