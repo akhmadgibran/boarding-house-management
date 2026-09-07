@@ -21,8 +21,8 @@ func NewDashboardHandler(r chi.Router, dbPool *pgxpool.Pool) {
 		r.Use(middleware.AuthorizeRole("ADMIN", "OPERATOR"))
 		
 		r.Get("/api/v1/admin/dashboard/summary", handler.GetSummary)
-		r.Post("/api/v1/admin/dashboard/occupancy-snapshots-snapshots/trigger", handler.TriggerSnapshot)
-		r.Post("/api/v1/admin/dashboard/occupancy-snapshots-snapshots/backfill", handler.Backfill)
+		r.Post("/api/v1/admin/dashboard/occupancy-snapshots/trigger", handler.TriggerSnapshot)
+		r.Post("/api/v1/admin/dashboard/occupancy-snapshots/backfill", handler.Backfill)
 		r.Get("/api/v1/admin/dashboard/occupancy-snapshots", handler.GetOccupancy)
 	})
 }
@@ -49,11 +49,18 @@ func (h *DashboardHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	te, _ := h.repo.GetTotalExpense(ctx)
 	to, _ := h.repo.GetTotalOutstanding(ctx)
 
-	// Calculate ending balance: Total Income - Total Expense
-	var endingBalance int64 = 0
-	if ti.Int != nil && te.Int != nil {
-		endingBalance = ti.Int.Int64() - te.Int.Int64()
+	numToFloat := func(n interface{}) float64 {
+		// pgtype.Numeric has Float64Value() (pgtype.Float8, error)
+		// We can just use reflection or type assertion if we import pgtype,
+		// but since we are in a handler and we know it's pgtype.Numeric:
+		if num, ok := n.(pgtype.Numeric); ok {
+			f, _ := num.Float64Value()
+			return f.Float64
+		}
+		return 0
 	}
+
+	endingBalance := numToFloat(ti) - numToFloat(te)
 
 	acts, _ := h.repo.GetRecentActivities(ctx)
 	var recentActs []map[string]interface{}
@@ -90,10 +97,10 @@ func (h *DashboardHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
 			"totalRooms": tr,
 			"occupiedRooms": or,
 			"totalActiveTenants": at,
-			"monthlyIncome": mi.Int,
-			"totalIncome": ti.Int,
-			"totalExpense": te.Int,
-			"totalOutstanding": to.Int,
+			"monthlyIncome": numToFloat(mi),
+			"totalIncome": numToFloat(ti),
+			"totalExpense": numToFloat(te),
+			"totalOutstanding": numToFloat(to),
 			"endingBalance": endingBalance,
 			// The frontend computes endingBalance manually anyway, or maybe expects it here
 		},
@@ -109,9 +116,42 @@ func (h *DashboardHandler) TriggerSnapshot(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *DashboardHandler) Backfill(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	totalRooms, _ := h.repo.GetTotalRooms(ctx)
+	occupiedRooms, _ := h.repo.GetOccupiedRoomsCount(ctx)
+	
+	now := time.Now()
+	_, err := h.repo.CreateOccupancySnapshot(ctx, repository.CreateOccupancySnapshotParams{
+		Year:          int32(now.Year()),
+		Month:         int32(now.Month()),
+		OccupiedRooms: int32(occupiedRooms),
+		TotalRooms:    int32(totalRooms),
+	})
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	response.Success(w, http.StatusOK, "Backfill triggered", nil)
 }
 
 func (h *DashboardHandler) GetOccupancy(w http.ResponseWriter, r *http.Request) {
-	response.Success(w, http.StatusOK, "Occupancy retrieved", map[string]interface{}{"snapshots": []interface{}{}})
+	ctx := r.Context()
+	snapshots, err := h.repo.GetOccupancySnapshots(ctx)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var result []map[string]interface{}
+	for _, s := range snapshots {
+		result = append(result, map[string]interface{}{
+			"year": s.Year,
+			"month": s.Month,
+			"occupiedRooms": s.OccupiedRooms,
+			"totalRooms": s.TotalRooms,
+		})
+	}
+	if result == nil {
+		result = []map[string]interface{}{}
+	}
+	response.Success(w, http.StatusOK, "Occupancy retrieved", map[string]interface{}{"snapshots": result})
 }

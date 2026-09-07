@@ -21,12 +21,19 @@ func NewPaymentHandler(r chi.Router, paymentUC domain.PaymentUseCase) {
 		paymentUC: paymentUC,
 	}
 
+	r.Route("/api/v1/occupant/payments", func(r chi.Router) {
+		r.Use(middleware.AuthMiddleware)
+		r.Get("/", handler.GetOccupantInvoices)
+		r.Get("/transactions", handler.GetOccupantTransactions)
+	})
+
 	r.Route("/api/v1/admin/payments", func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware)
 		r.Get("/", handler.ListInvoices)
 		r.Get("/transactions", handler.ListFinancialRecords)
 		r.Post("/", handler.CreateInvoice)
 		r.Post("/transaction", handler.ProcessTransaction)
+		r.Delete("/{id}", handler.CancelInvoice)
 	})
 }
 
@@ -49,7 +56,7 @@ func (h *PaymentHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		mapped = append(mapped, map[string]interface{}{
 			"id": inv.ID,
 			"roomId": inv.RoomID,
-			"occupantId": formatUUID(inv.OccupantID),
+			"occupantId": inv.OccupantID,
 			"priceApplied": inv.PriceApplied,
 			"paidNominal": inv.PaidNominal,
 			"periodStart": inv.PeriodStart.Time,
@@ -141,4 +148,99 @@ func formatUUID(u pgtype.UUID) interface{} {
 		return nil
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", u.Bytes[0:4], u.Bytes[4:6], u.Bytes[6:8], u.Bytes[8:10], u.Bytes[10:16])
+}
+
+func (h *PaymentHandler) GetOccupantInvoices(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	invoices, err := h.paymentUC.GetOccupantInvoices(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	mapped := make([]map[string]interface{}, 0)
+	for _, inv := range invoices {
+		var room, occ, pOcc, iPayments interface{}
+		json.Unmarshal(inv.Room, &room)
+		json.Unmarshal(inv.Occupant, &occ)
+		json.Unmarshal(inv.PriorOccupant, &pOcc)
+		iPayments = inv.InvoicePayments
+		if iPayments == nil { iPayments = []interface{}{} }
+
+		mapped = append(mapped, map[string]interface{}{
+			"id": inv.ID,
+			"roomId": inv.RoomID,
+			"occupantId": formatUUID(inv.OccupantID),
+			"priceApplied": inv.PriceApplied,
+			"paidNominal": inv.PaidNominal,
+			"periodStart": inv.PeriodStart.Time,
+			"periodEnd": inv.PeriodEnd.Time,
+			"status": inv.Status,
+			"isDpReservation": inv.IsDpReservation,
+			"waitingForRoomVacant": inv.WaitingForRoomVacant,
+			"createdAt": inv.CreatedAt.Time,
+			"updatedAt": inv.UpdatedAt.Time,
+			"priorOccupantId": formatUUID(inv.PriorOccupantID),
+			"room": room,
+			"occupant": occ,
+			"priorOccupant": pOcc,
+			"invoicePayments": iPayments,
+		})
+	}
+	response.Success(w, http.StatusOK, "Invoices retrieved", map[string]interface{}{"invoices": mapped})
+}
+
+func (h *PaymentHandler) GetOccupantTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	records, err := h.paymentUC.GetOccupantTransactions(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	mapped := make([]map[string]interface{}, 0)
+	for _, rec := range records {
+		var occ, iPayments interface{}
+		json.Unmarshal(rec.Occupant, &occ)
+		iPayments = rec.InvoicePayments
+		if iPayments == nil { iPayments = []interface{}{} }
+
+		mapped = append(mapped, map[string]interface{}{
+			"id": rec.ID,
+			"type": rec.Type,
+			"amount": func() float64 { v, _ := rec.Amount.Float64Value(); return v.Float64 }(),
+			"description": rec.Description.String,
+			"paymentDate": rec.Date.Time,
+			"paymentMethod": "TRANSFER", // Dummy fallback
+			"paymentId": formatUUID(rec.PaymentID),
+			"assetId": formatUUID(rec.AssetID),
+			"expenseCategory": rec.ExpenseCategory,
+			"createdAt": rec.CreatedAt.Time,
+			"occupant": occ,
+			"invoicePayments": iPayments,
+		})
+	}
+	response.Success(w, http.StatusOK, "Transactions retrieved", map[string]interface{}{"transactions": mapped})
+}
+
+func (h *PaymentHandler) CancelInvoice(w http.ResponseWriter, r *http.Request) {
+	idParam := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid invoice ID")
+		return
+	}
+	
+	err = h.paymentUC.CancelInvoice(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, http.StatusOK, "Invoice cancelled successfully", nil)
 }

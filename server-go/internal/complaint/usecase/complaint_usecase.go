@@ -47,12 +47,6 @@ func (u *complaintUseCase) GetOccupantComplaints(ctx context.Context, reportedBy
 	return complaints, nil
 }
 
-func (u *complaintUseCase) UpdateComplaintStatus(ctx context.Context, id uuid.UUID, status string) (repository.Complaint, error) {
-	return u.repo.UpdateComplaintStatus(ctx, repository.UpdateComplaintStatusParams{
-		ID:     id,
-		Status: repository.ComplaintStatusEnum(status),
-	})
-}
 
 func (u *complaintUseCase) GetOccupantAssets(ctx context.Context, occupantID uuid.UUID) ([]repository.GetOccupantCurrentRoomAssetsRow, error) {
 	pgUUID := pgtype.UUID{Bytes: occupantID, Valid: true}
@@ -64,4 +58,23 @@ func (u *complaintUseCase) GetOccupantAssets(ctx context.Context, occupantID uui
 		assets = []repository.GetOccupantCurrentRoomAssetsRow{}
 	}
 	return assets, nil
+}
+func (u *complaintUseCase) UpdateComplaintStatus(ctx context.Context, id uuid.UUID, status string, maintenanceDetails *string) (repository.Complaint, error) {
+	comp, err := u.repo.UpdateComplaintStatus(ctx, repository.UpdateComplaintStatusParams{
+		ID:     id,
+		Status: repository.ComplaintStatusEnum(status),
+	})
+	if err != nil {
+		return comp, err
+	}
+	
+	if maintenanceDetails != nil && comp.AssetID.Valid {
+		_, err = u.repo.CreateAssetMaintenanceLog(ctx, repository.CreateAssetMaintenanceLogParams{
+			AssetID: comp.AssetID.Bytes,
+			Details: *maintenanceDetails,
+			Status:  repository.MaintenanceStatusEnumFINISHED, // Default to FINISHED
+		})
+	}
+	
+	return comp, nil
 }

@@ -104,6 +104,19 @@ func (q *Queries) GetActiveRoomOccupancy(ctx context.Context, roomID uuid.UUID) 
 	return i, err
 }
 
+const getOccupantActiveRoom = `-- name: GetOccupantActiveRoom :one
+SELECT room_id FROM invoices 
+WHERE occupant_id = $1 AND period_end > CURRENT_TIMESTAMP AND waiting_for_room_vacant = false
+ORDER BY period_start ASC LIMIT 1
+`
+
+func (q *Queries) GetOccupantActiveRoom(ctx context.Context, occupantID pgtype.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getOccupantActiveRoom, occupantID)
+	var room_id uuid.UUID
+	err := row.Scan(&room_id)
+	return room_id, err
+}
+
 const getRoom = `-- name: GetRoom :one
 SELECT id, name, price, status, created_at, updated_at FROM rooms
 WHERE id = $1 LIMIT 1
@@ -274,7 +287,7 @@ SELECT
         '[]'::json
     )::json as assets,
     (SELECT COUNT(*) FROM invoices WHERE room_id = r.id) as invoices_count,
-    (SELECT COUNT(*) FROM invoices i JOIN payments p ON i.id = p.id WHERE i.room_id = r.id) as payments_count,
+    (SELECT COUNT(DISTINCT p.id) FROM invoices i JOIN invoice_payments ip ON i.id = ip.invoice_id JOIN payments p ON ip.payment_id = p.id WHERE i.room_id = r.id) as payments_count,
     (SELECT json_build_object('id', u.id, 'email', u.email, 'name', od.name)
      FROM occupant_details od 
      JOIN users u ON od.user_id = u.id 

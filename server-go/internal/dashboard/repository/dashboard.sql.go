@@ -12,6 +12,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createOccupancySnapshot = `-- name: CreateOccupancySnapshot :one
+INSERT INTO room_occupancy_snapshots (year, month, occupied_rooms, total_rooms, snapshot_date)
+VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+ON CONFLICT (year, month) DO UPDATE 
+SET occupied_rooms = EXCLUDED.occupied_rooms, total_rooms = EXCLUDED.total_rooms, snapshot_date = CURRENT_TIMESTAMP
+RETURNING id, year, month, occupied_rooms, total_rooms, snapshot_date, created_at, updated_at
+`
+
+type CreateOccupancySnapshotParams struct {
+	Year          int32 `json:"year"`
+	Month         int32 `json:"month"`
+	OccupiedRooms int32 `json:"occupied_rooms"`
+	TotalRooms    int32 `json:"total_rooms"`
+}
+
+func (q *Queries) CreateOccupancySnapshot(ctx context.Context, arg CreateOccupancySnapshotParams) (RoomOccupancySnapshot, error) {
+	row := q.db.QueryRow(ctx, createOccupancySnapshot,
+		arg.Year,
+		arg.Month,
+		arg.OccupiedRooms,
+		arg.TotalRooms,
+	)
+	var i RoomOccupancySnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.Year,
+		&i.Month,
+		&i.OccupiedRooms,
+		&i.TotalRooms,
+		&i.SnapshotDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getActiveTenantsCount = `-- name: GetActiveTenantsCount :one
 SELECT COUNT(DISTINCT user_id) FROM occupant_details WHERE status = 'ACTIVE'
 `
@@ -38,6 +74,39 @@ func (q *Queries) GetMonthlyIncome(ctx context.Context, arg GetMonthlyIncomePara
 	var column_1 pgtype.Numeric
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const getOccupancySnapshots = `-- name: GetOccupancySnapshots :many
+SELECT id, year, month, occupied_rooms, total_rooms, snapshot_date, created_at, updated_at FROM room_occupancy_snapshots ORDER BY year ASC, month ASC
+`
+
+func (q *Queries) GetOccupancySnapshots(ctx context.Context) ([]RoomOccupancySnapshot, error) {
+	rows, err := q.db.Query(ctx, getOccupancySnapshots)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RoomOccupancySnapshot
+	for rows.Next() {
+		var i RoomOccupancySnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.Year,
+			&i.Month,
+			&i.OccupiedRooms,
+			&i.TotalRooms,
+			&i.SnapshotDate,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getOccupiedRoomsCount = `-- name: GetOccupiedRoomsCount :one

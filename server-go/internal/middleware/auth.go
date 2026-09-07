@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"server-go/pkg/response"
 )
 
@@ -55,7 +56,19 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), UserIDKey, claims["user_id"])
+		userIDStr, ok := claims["user_id"].(string)
+		if !ok {
+			response.Error(w, http.StatusUnauthorized, "Invalid user_id in token")
+			return
+		}
+		
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			response.Error(w, http.StatusUnauthorized, "Invalid user_id format in token")
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		ctx = context.WithValue(ctx, UserRoleKey, claims["role"])
 
 		next.ServeHTTP(w, r.WithContext(ctx))

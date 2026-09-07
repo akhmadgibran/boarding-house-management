@@ -75,3 +75,62 @@ SELECT
     ) as invoice_payments
 FROM financial_records fr
 ORDER BY fr.created_at DESC;
+-- name: GetOccupantInvoices :many
+SELECT 
+    i.*,
+    (SELECT json_build_object('id', r.id, 'name', r.name, 'price', r.price) FROM rooms r WHERE r.id = i.room_id) as room,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id WHERE u.id = i.occupant_id) as occupant,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id WHERE u.id = i.prior_occupant_id) as prior_occupant,
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id', ip.id,
+            'amountApplied', ip.amount_applied,
+            'payment', json_build_object(
+                'id', p.id,
+                'amount', p.amount,
+                'paymentDate', p.payment_date,
+                'paymentMethod', p.payment_method,
+                'note', p.note
+            )
+        ))
+        FROM invoice_payments ip
+        JOIN payments p ON ip.payment_id = p.id
+        WHERE ip.invoice_id = i.id),
+        '[]'::json
+    ) as invoice_payments
+FROM invoices i
+WHERE i.occupant_id = $1
+ORDER BY i.period_start DESC;
+
+-- name: GetOccupantTransactions :many
+SELECT 
+    fr.*,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id 
+     JOIN payments p ON fr.payment_id = p.id WHERE p.occupant_id = u.id) as occupant,
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id', ip.id,
+            'amountApplied', ip.amount_applied,
+            'invoice', json_build_object(
+                'id', i.id,
+                'periodStart', i.period_start,
+                'periodEnd', i.period_end,
+                'room', (SELECT json_build_object('id', r.id, 'name', r.name) FROM rooms r WHERE r.id = i.room_id)
+            )
+        ))
+        FROM payments p
+        JOIN invoice_payments ip ON ip.payment_id = p.id
+        JOIN invoices i ON ip.invoice_id = i.id
+        WHERE p.id = fr.payment_id),
+        '[]'::json
+    ) as invoice_payments
+FROM financial_records fr
+JOIN payments p ON fr.payment_id = p.id
+WHERE p.occupant_id = $1
+ORDER BY fr.created_at DESC;
+
+-- name: DeleteInvoice :exec
+DELETE FROM invoices WHERE id = $1 AND status = 'UNPAID';

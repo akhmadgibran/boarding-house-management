@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kost-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kost-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kost-db
+  template:
+    metadata:
+      labels:
+        app: kost-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "kost_user"
+            - name: POSTGRES_PASSWORD
+              value: "kost_password"
+            - name: POSTGRES_DB
+              value: "kost_db"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: kost-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kost-db-service
+spec:
+  selector:
+    app: kost-db
+  ports:
+    - port: 5432
+      targetPort: 5432

@@ -34,6 +34,8 @@
 
 The Boarding House Management System is an end-to-end platform designed specifically to streamline daily operations for owners (admins) and field staff (operators).
 
+🌍 **Live Demo / Production:** [https://coliving.nabilbuilds.my.id](https://coliving.nabilbuilds.my.id)
+
 Key features include:
 
 - **Room & Asset Management:** Track room availability and facility completeness.
@@ -46,11 +48,11 @@ Key features include:
 
 | Layer             | Technology                                                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend**      | [Next.js 16](https://nextjs.org/), [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS v4](https://tailwindcss.com/) |
-| **Backend**       | [Golang 1.23, Chi Router, pgx, sqlc](https://www.prisma.io/)                                 |
-| **Database**      | [PostgreSQL 16](https://www.mysql.com/)                                                                                             |
-| **Security/Auth** | JWT + bcrypt, Helmet, CORS                                                                                                                                    |
-| **Deployment**    | GitHub Actions CI/CD → cPanel (Phusion Passenger)                                                                                                             |
+| **Frontend**      | [Next.js 15](https://nextjs.org/), [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS v4](https://tailwindcss.com/) |
+| **Backend**       | [Golang 1.23](https://golang.org/), [Chi Router](https://go-chi.io/), [pgx](https://github.com/jackc/pgx), [sqlc](https://sqlc.dev/) |
+| **Database**      | [PostgreSQL 15+](https://www.postgresql.org/) |
+| **Security/Auth** | JWT + bcrypt, CORS |
+| **Deployment**    | GitHub Actions CI/CD → GHCR Container Registry → K3s (Kubernetes) + Caddy + Cloudflare Tunnels |
 
 ---
 
@@ -61,15 +63,9 @@ This project is built using a simple monorepo architecture separating the client
 ```text
 kost-project-main/
 ├── server-go/         # Golang REST API
-│   ├── cmd/             # Application entrypoints
-│   ├── db/              # SQL queries (sqlc) & migrations
-│   └── internal/        # Domain-driven backend modules             # Express.js REST API
-│   ├── prisma/          # Schema, migrations & SQL seeds
-│   └── src/
-│       ├── controllers/ # Request handlers (Business Logic)
-│       ├── middlewares/ # Auth & RBAC Logic
-│       ├── routes/      # Express route definitions
-│       └── utils/       # DB client, services, schedulers (Cron jobs)
+│   ├── cmd/             # Application entrypoints (api, seeder)
+│   ├── db/              # SQL queries (sqlc) & migrations (goose)
+│   └── internal/        # Domain-driven backend modules (Handlers, UseCases, Repos)
 ├── client/                          # Next.js App Router Application
 │   └── src/
 │       ├── app/         # Pages & layouts by route group
@@ -105,18 +101,17 @@ Ensure your environment has the following installed:
     cp .env.example .env
     ```
 3. Edit `.env` and adjust the `DATABASE_URL` credentials to match your local database.
-4. Install dependencies:
+4. Run migrations:
     ```bash
-    npm install
+    make migrate-up
     ```
-5. Migrate and run the seed to populate dummy data:
+5. Run the production seeder to populate realistic demo data:
     ```bash
-    make migrate
-    make seed
+    psql -U your_user -d your_db < ../docs/postgres_seed_production.sql
     ```
-6. Start the server:
+6. Start the server (using Air for live-reload):
     ```bash
-    go run cmd/api/main.go
+    make run
     ```
     _The backend will run on `http://localhost:8080`_
 

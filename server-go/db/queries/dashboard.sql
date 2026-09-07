@@ -35,3 +35,13 @@ ORDER BY c.created_at DESC LIMIT 5;
 
 -- name: GetTotalOutstanding :one
 SELECT COALESCE(SUM(price_applied - paid_nominal), 0)::numeric FROM invoices WHERE status != 'PAID';
+
+-- name: GetOccupancySnapshots :many
+SELECT * FROM room_occupancy_snapshots ORDER BY year ASC, month ASC;
+
+-- name: CreateOccupancySnapshot :one
+INSERT INTO room_occupancy_snapshots (year, month, occupied_rooms, total_rooms, snapshot_date)
+VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+ON CONFLICT (year, month) DO UPDATE 
+SET occupied_rooms = EXCLUDED.occupied_rooms, total_rooms = EXCLUDED.total_rooms, snapshot_date = CURRENT_TIMESTAMP
+RETURNING *;

@@ -127,11 +127,19 @@ func (h *AssetHandler) DeleteAssetMaster(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *AssetHandler) CreateMaintenanceLog(w http.ResponseWriter, r *http.Request) {
+	assetIDParam := chi.URLParam(r, "assetID")
+	assetID, err := uuid.Parse(assetIDParam)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid asset ID format")
+		return
+	}
+
 	var req repository.CreateMaintenanceLogParams
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
+	req.AssetID = assetID
 	res, err := h.assetUC.CreateMaintenanceLog(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
@@ -187,11 +195,18 @@ func (h *AssetHandler) GetMaintenanceLogs(w http.ResponseWriter, r *http.Request
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var data interface{} = logs
-	if logs == nil {
-		data = []interface{}{}
+	mapped := make([]map[string]interface{}, 0)
+	for _, log := range logs {
+		mapped = append(mapped, map[string]interface{}{
+			"id": log.ID,
+			"assetId": log.AssetID,
+			"details": log.Details,
+			"status": log.Status,
+			"createdAt": log.CreatedAt.Time,
+			"updatedAt": log.UpdatedAt.Time,
+		})
 	}
-	response.Success(w, http.StatusOK, "Maintenance logs retrieved", map[string]interface{}{"logs": data})
+	response.Success(w, http.StatusOK, "Maintenance logs retrieved", map[string]interface{}{"logs": mapped})
 }
 
 func (h *AssetHandler) ListAssetMasters(w http.ResponseWriter, r *http.Request) {

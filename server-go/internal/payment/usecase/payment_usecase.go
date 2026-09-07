@@ -106,3 +106,19 @@ func (u *paymentUseCase) CreatePaymentTransaction(ctx context.Context, invoiceID
 
 	return tx.Commit(ctx)
 }
+
+func (u *paymentUseCase) GetOccupantInvoices(ctx context.Context, occupantID uuid.UUID) ([]repository.GetOccupantInvoicesRow, error) {
+	return u.repo.GetOccupantInvoices(ctx, pgtype.UUID{Bytes: occupantID, Valid: true})
+}
+
+func (u *paymentUseCase) GetOccupantTransactions(ctx context.Context, occupantID uuid.UUID) ([]repository.GetOccupantTransactionsRow, error) {
+	return u.repo.GetOccupantTransactions(ctx, occupantID)
+}
+
+func (u *paymentUseCase) CancelInvoice(ctx context.Context, id uuid.UUID) error {
+	err := u.repo.DeleteInvoice(ctx, id)
+	if err != nil {
+		return errors.New("failed to cancel invoice")
+	}
+	return nil
+}

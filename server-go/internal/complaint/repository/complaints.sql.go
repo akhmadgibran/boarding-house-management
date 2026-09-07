@@ -12,6 +12,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createAssetMaintenanceLog = `-- name: CreateAssetMaintenanceLog :one
+INSERT INTO asset_maintenance_log (asset_id, details, status)
+VALUES ($1, $2, $3) RETURNING id, asset_id, details, status, created_at, updated_at
+`
+
+type CreateAssetMaintenanceLogParams struct {
+	AssetID uuid.UUID             `json:"asset_id"`
+	Details string                `json:"details"`
+	Status  MaintenanceStatusEnum `json:"status"`
+}
+
+func (q *Queries) CreateAssetMaintenanceLog(ctx context.Context, arg CreateAssetMaintenanceLogParams) (AssetMaintenanceLog, error) {
+	row := q.db.QueryRow(ctx, createAssetMaintenanceLog, arg.AssetID, arg.Details, arg.Status)
+	var i AssetMaintenanceLog
+	err := row.Scan(
+		&i.ID,
+		&i.AssetID,
+		&i.Details,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createComplaint = `-- name: CreateComplaint :one
 INSERT INTO complaints (category, detail, status, reported_by_id, asset_id)
 VALUES ($1, $2, $3, $4, $5) RETURNING id, category, detail, status, reported_by_id, asset_id, created_at, updated_at
@@ -160,10 +185,11 @@ SELECT a.id, a.asset_master_id, a.room_id, a.name, a.details, a.status, a.create
 FROM assets a
 JOIN rooms r ON a.room_id = r.id
 JOIN asset_masters m ON a.asset_master_id = m.id
-JOIN invoices i ON i.room_id = r.id
-WHERE i.occupant_id = $1
-  AND i.waiting_for_room_vacant = false
-  AND i.period_end > CURRENT_TIMESTAMP
+WHERE a.room_id = (
+  SELECT room_id FROM invoices
+  WHERE occupant_id = $1
+  ORDER BY period_end DESC LIMIT 1
+)
 ORDER BY a.name ASC
 `
 

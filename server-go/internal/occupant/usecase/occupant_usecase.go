@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5"
 
 	"server-go/internal/domain"
@@ -41,4 +42,53 @@ func (u *occupantUseCase) GetOccupantDetail(ctx context.Context, userID uuid.UUI
 		return repository.GetOccupantDetailRow{}, errors.New("failed to fetch occupant detail")
 	}
 	return occupant, nil
+}
+
+func (u *occupantUseCase) CreateOccupant(ctx context.Context, email, password, name, phone, idCard, emergencyContact string) (repository.OccupantDetail, error) {
+	// Simple mock hashing for password
+	userID, err := u.repo.CreateUser(ctx, repository.CreateUserParams{
+		Email:    email,
+		Password: password, // Should be hashed in real app
+	})
+	if err != nil {
+		return repository.OccupantDetail{}, errors.New("failed to create user")
+	}
+
+	detail, err := u.repo.CreateOccupantDetail(ctx, repository.CreateOccupantDetailParams{
+		UserID:           userID,
+		Name:             name,
+		PhoneNumber:      pgtype.Text{String: phone, Valid: phone != ""},
+		IDCardNumber:     pgtype.Text{String: idCard, Valid: idCard != ""},
+		EmergencyContact: pgtype.Text{String: emergencyContact, Valid: emergencyContact != ""},
+	})
+	if err != nil {
+		return repository.OccupantDetail{}, errors.New("failed to create occupant detail")
+	}
+
+	return detail, nil
+}
+
+func (u *occupantUseCase) UpdateOccupant(ctx context.Context, userID uuid.UUID, name, phone, idCard, emergencyContact string) (repository.OccupantDetail, error) {
+	detail, err := u.repo.UpdateOccupantDetail(ctx, repository.UpdateOccupantDetailParams{
+		UserID:           userID,
+		Name:             name,
+		PhoneNumber:      pgtype.Text{String: phone, Valid: phone != ""},
+		IDCardNumber:     pgtype.Text{String: idCard, Valid: idCard != ""},
+		EmergencyContact: pgtype.Text{String: emergencyContact, Valid: emergencyContact != ""},
+	})
+	if err != nil {
+		return repository.OccupantDetail{}, errors.New("failed to update occupant detail")
+	}
+	return detail, nil
+}
+
+func (u *occupantUseCase) UpdateOccupantStatus(ctx context.Context, userID uuid.UUID, status string) (repository.OccupantDetail, error) {
+	detail, err := u.repo.UpdateOccupantStatus(ctx, repository.UpdateOccupantStatusParams{
+		UserID: userID,
+		Status: repository.ProfileStatusEnum(status),
+	})
+	if err != nil {
+		return repository.OccupantDetail{}, errors.New("failed to update occupant status")
+	}
+	return detail, nil
 }

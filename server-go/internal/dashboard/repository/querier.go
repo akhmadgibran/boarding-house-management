@@ -11,8 +11,10 @@ import (
 )
 
 type Querier interface {
+	CreateOccupancySnapshot(ctx context.Context, arg CreateOccupancySnapshotParams) (RoomOccupancySnapshot, error)
 	GetActiveTenantsCount(ctx context.Context) (int64, error)
 	GetMonthlyIncome(ctx context.Context, arg GetMonthlyIncomeParams) (pgtype.Numeric, error)
+	GetOccupancySnapshots(ctx context.Context) ([]RoomOccupancySnapshot, error)
 	GetOccupiedRoomsCount(ctx context.Context) (int64, error)
 	GetRecentActivities(ctx context.Context) ([]GetRecentActivitiesRow, error)
 	GetRecentComplaints(ctx context.Context) ([]GetRecentComplaintsRow, error)

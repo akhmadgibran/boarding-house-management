@@ -31,7 +31,7 @@ func NewRoomHandler(r chi.Router, roomUC domain.RoomUseCase) {
 		r.Get("/{id}", handler.GetRoom)
 		r.Post("/", handler.CreateRoom)
 		r.Put("/{id}", handler.UpdateRoom)
-		r.Patch("/{id}/checkout", handler.CheckoutRoom)
+		r.Post("/{id}/checkout", handler.CheckoutRoom)
 		r.Delete("/{id}", handler.DeleteRoom)
 	})
 }

@@ -40,8 +40,12 @@ func (h *FinanceHandler) GetAllFinancialRecords(w http.ResponseWriter, r *http.R
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	filterType := r.URL.Query().Get("type")
 	mapped := make([]map[string]interface{}, 0)
 	for _, rec := range res {
+		if filterType != "" && string(rec.Type) != filterType {
+			continue
+		}
 		mapped = append(mapped, map[string]interface{}{
 			"id": rec.ID,
 			"type": rec.Type,

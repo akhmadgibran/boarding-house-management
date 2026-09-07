@@ -11,8 +11,12 @@ import (
 )
 
 type Querier interface {
+	CreateOccupantDetail(ctx context.Context, arg CreateOccupantDetailParams) (OccupantDetail, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UUID, error)
 	GetOccupantDetail(ctx context.Context, id uuid.UUID) (GetOccupantDetailRow, error)
 	ListOccupants(ctx context.Context) ([]ListOccupantsRow, error)
+	UpdateOccupantDetail(ctx context.Context, arg UpdateOccupantDetailParams) (OccupantDetail, error)
+	UpdateOccupantStatus(ctx context.Context, arg UpdateOccupantStatusParams) (OccupantDetail, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -28,8 +28,13 @@ SELECT a.*, r.name as room_name, m.name as master_name
 FROM assets a
 JOIN rooms r ON a.room_id = r.id
 JOIN asset_masters m ON a.asset_master_id = m.id
-JOIN invoices i ON i.room_id = r.id
-WHERE i.occupant_id = $1
-  AND i.waiting_for_room_vacant = false
-  AND i.period_end > CURRENT_TIMESTAMP
+WHERE a.room_id = (
+  SELECT room_id FROM invoices
+  WHERE occupant_id = $1
+  ORDER BY period_end DESC LIMIT 1
+)
 ORDER BY a.name ASC;
+
+-- name: CreateAssetMaintenanceLog :one
+INSERT INTO asset_maintenance_log (asset_id, details, status)
+VALUES ($1, $2, $3) RETURNING *;

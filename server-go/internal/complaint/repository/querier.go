@@ -12,6 +12,7 @@ import (
 )
 
 type Querier interface {
+	CreateAssetMaintenanceLog(ctx context.Context, arg CreateAssetMaintenanceLogParams) (AssetMaintenanceLog, error)
 	CreateComplaint(ctx context.Context, arg CreateComplaintParams) (Complaint, error)
 	GetAllComplaints(ctx context.Context) ([]GetAllComplaintsRow, error)
 	GetComplaintsByReporter(ctx context.Context, reportedByID uuid.UUID) ([]GetComplaintsByReporterRow, error)

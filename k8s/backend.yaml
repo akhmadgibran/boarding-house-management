@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kost-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kost-backend
+  template:
+    metadata:
+      labels:
+        app: kost-backend
+    spec:
+      containers:
+        - name: kost-backend
+          image: ghcr.io/USERNAME_GITHUB/REPO-backend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              value: "postgres://kost_user:kost_password@kost-db-service:5432/kost_db?sslmode=disable"
+            - name: JWT_SECRET
+              value: "secret_rahasia_untuk_dev"
+            - name: PORT
+              value: "8080"
+            - name: CORS_ORIGIN
+              value: "https://coliving.nabilbuilds.my.id"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "384Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kost-backend-service
+spec:
+  type: NodePort
+  selector:
+    app: kost-backend
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30300

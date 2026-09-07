@@ -114,6 +114,15 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 	return i, err
 }
 
+const deleteInvoice = `-- name: DeleteInvoice :exec
+DELETE FROM invoices WHERE id = $1 AND status = 'UNPAID'
+`
+
+func (q *Queries) DeleteInvoice(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteInvoice, id)
+	return err
+}
+
 const getInvoice = `-- name: GetInvoice :one
 SELECT id, room_id, occupant_id, price_applied, paid_nominal, period_start, period_end, status, note, created_at, updated_at, import_code, is_dp_reservation, waiting_for_room_vacant, prior_occupant_id FROM invoices WHERE id = $1 LIMIT 1
 `
@@ -139,6 +148,175 @@ func (q *Queries) GetInvoice(ctx context.Context, id uuid.UUID) (Invoice, error)
 		&i.PriorOccupantID,
 	)
 	return i, err
+}
+
+const getOccupantInvoices = `-- name: GetOccupantInvoices :many
+SELECT 
+    i.id, i.room_id, i.occupant_id, i.price_applied, i.paid_nominal, i.period_start, i.period_end, i.status, i.note, i.created_at, i.updated_at, i.import_code, i.is_dp_reservation, i.waiting_for_room_vacant, i.prior_occupant_id,
+    (SELECT json_build_object('id', r.id, 'name', r.name, 'price', r.price) FROM rooms r WHERE r.id = i.room_id) as room,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id WHERE u.id = i.occupant_id) as occupant,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id WHERE u.id = i.prior_occupant_id) as prior_occupant,
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id', ip.id,
+            'amountApplied', ip.amount_applied,
+            'payment', json_build_object(
+                'id', p.id,
+                'amount', p.amount,
+                'paymentDate', p.payment_date,
+                'paymentMethod', p.payment_method,
+                'note', p.note
+            )
+        ))
+        FROM invoice_payments ip
+        JOIN payments p ON ip.payment_id = p.id
+        WHERE ip.invoice_id = i.id),
+        '[]'::json
+    ) as invoice_payments
+FROM invoices i
+WHERE i.occupant_id = $1
+ORDER BY i.period_start DESC
+`
+
+type GetOccupantInvoicesRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	RoomID               uuid.UUID          `json:"room_id"`
+	OccupantID           pgtype.UUID        `json:"occupant_id"`
+	PriceApplied         pgtype.Numeric     `json:"price_applied"`
+	PaidNominal          pgtype.Numeric     `json:"paid_nominal"`
+	PeriodStart          pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd            pgtype.Timestamptz `json:"period_end"`
+	Status               PaymentStatusEnum  `json:"status"`
+	Note                 pgtype.Text        `json:"note"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ImportCode           pgtype.Text        `json:"import_code"`
+	IsDpReservation      bool               `json:"is_dp_reservation"`
+	WaitingForRoomVacant bool               `json:"waiting_for_room_vacant"`
+	PriorOccupantID      pgtype.UUID        `json:"prior_occupant_id"`
+	Room                 []byte             `json:"room"`
+	Occupant             []byte             `json:"occupant"`
+	PriorOccupant        []byte             `json:"prior_occupant"`
+	InvoicePayments      interface{}        `json:"invoice_payments"`
+}
+
+func (q *Queries) GetOccupantInvoices(ctx context.Context, occupantID pgtype.UUID) ([]GetOccupantInvoicesRow, error) {
+	rows, err := q.db.Query(ctx, getOccupantInvoices, occupantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOccupantInvoicesRow
+	for rows.Next() {
+		var i GetOccupantInvoicesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.OccupantID,
+			&i.PriceApplied,
+			&i.PaidNominal,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.Status,
+			&i.Note,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ImportCode,
+			&i.IsDpReservation,
+			&i.WaitingForRoomVacant,
+			&i.PriorOccupantID,
+			&i.Room,
+			&i.Occupant,
+			&i.PriorOccupant,
+			&i.InvoicePayments,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOccupantTransactions = `-- name: GetOccupantTransactions :many
+SELECT 
+    fr.id, fr.type, fr.amount, fr.description, fr.payment_id, fr.created_at, fr.updated_at, fr.date, fr.asset_id, fr.expense_category,
+    (SELECT json_build_object('id', u.id, 'email', u.email, 'occupantDetails', json_build_object('name', od.name, 'status', od.status)) 
+     FROM users u JOIN occupant_details od ON u.id = od.user_id 
+     JOIN payments p ON fr.payment_id = p.id WHERE p.occupant_id = u.id) as occupant,
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id', ip.id,
+            'amountApplied', ip.amount_applied,
+            'invoice', json_build_object(
+                'id', i.id,
+                'periodStart', i.period_start,
+                'periodEnd', i.period_end,
+                'room', (SELECT json_build_object('id', r.id, 'name', r.name) FROM rooms r WHERE r.id = i.room_id)
+            )
+        ))
+        FROM payments p
+        JOIN invoice_payments ip ON ip.payment_id = p.id
+        JOIN invoices i ON ip.invoice_id = i.id
+        WHERE p.id = fr.payment_id),
+        '[]'::json
+    ) as invoice_payments
+FROM financial_records fr
+JOIN payments p ON fr.payment_id = p.id
+WHERE p.occupant_id = $1
+ORDER BY fr.created_at DESC
+`
+
+type GetOccupantTransactionsRow struct {
+	ID              uuid.UUID               `json:"id"`
+	Type            TransactionTypeEnum     `json:"type"`
+	Amount          pgtype.Numeric          `json:"amount"`
+	Description     pgtype.Text             `json:"description"`
+	PaymentID       pgtype.UUID             `json:"payment_id"`
+	CreatedAt       pgtype.Timestamptz      `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz      `json:"updated_at"`
+	Date            pgtype.Timestamptz      `json:"date"`
+	AssetID         pgtype.UUID             `json:"asset_id"`
+	ExpenseCategory NullExpenseCategoryEnum `json:"expense_category"`
+	Occupant        []byte                  `json:"occupant"`
+	InvoicePayments interface{}             `json:"invoice_payments"`
+}
+
+func (q *Queries) GetOccupantTransactions(ctx context.Context, occupantID uuid.UUID) ([]GetOccupantTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getOccupantTransactions, occupantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOccupantTransactionsRow
+	for rows.Next() {
+		var i GetOccupantTransactionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Amount,
+			&i.Description,
+			&i.PaymentID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Date,
+			&i.AssetID,
+			&i.ExpenseCategory,
+			&i.Occupant,
+			&i.InvoicePayments,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFinancialRecords = `-- name: ListFinancialRecords :many

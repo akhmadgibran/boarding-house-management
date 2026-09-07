@@ -8,13 +8,17 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateInvoicePayment(ctx context.Context, arg CreateInvoicePaymentParams) error
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	DeleteInvoice(ctx context.Context, id uuid.UUID) error
 	GetInvoice(ctx context.Context, id uuid.UUID) (Invoice, error)
+	GetOccupantInvoices(ctx context.Context, occupantID pgtype.UUID) ([]GetOccupantInvoicesRow, error)
+	GetOccupantTransactions(ctx context.Context, occupantID uuid.UUID) ([]GetOccupantTransactionsRow, error)
 	ListFinancialRecords(ctx context.Context) ([]FinancialRecord, error)
 	ListFinancialRecordsWithDetails(ctx context.Context) ([]ListFinancialRecordsWithDetailsRow, error)
 	ListInvoices(ctx context.Context) ([]Invoice, error)

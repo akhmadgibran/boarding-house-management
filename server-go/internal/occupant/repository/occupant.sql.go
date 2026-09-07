@@ -12,6 +12,63 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createOccupantDetail = `-- name: CreateOccupantDetail :one
+INSERT INTO occupant_details (user_id, name, phone_number, id_card_number, emergency_contact)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, name, phone_number, address, id_card_number, emergency_contact, status, move_in_date, move_out_date, created_at, updated_at, occupation
+`
+
+type CreateOccupantDetailParams struct {
+	UserID           uuid.UUID   `json:"user_id"`
+	Name             string      `json:"name"`
+	PhoneNumber      pgtype.Text `json:"phone_number"`
+	IDCardNumber     pgtype.Text `json:"id_card_number"`
+	EmergencyContact pgtype.Text `json:"emergency_contact"`
+}
+
+func (q *Queries) CreateOccupantDetail(ctx context.Context, arg CreateOccupantDetailParams) (OccupantDetail, error) {
+	row := q.db.QueryRow(ctx, createOccupantDetail,
+		arg.UserID,
+		arg.Name,
+		arg.PhoneNumber,
+		arg.IDCardNumber,
+		arg.EmergencyContact,
+	)
+	var i OccupantDetail
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.PhoneNumber,
+		&i.Address,
+		&i.IDCardNumber,
+		&i.EmergencyContact,
+		&i.Status,
+		&i.MoveInDate,
+		&i.MoveOutDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Occupation,
+	)
+	return i, err
+}
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (email, password, role)
+VALUES ($1, $2, 'OCCUPANT') RETURNING id
+`
+
+type CreateUserParams struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Password)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getOccupantDetail = `-- name: GetOccupantDetail :one
 SELECT u.email, o.id, o.user_id, o.name, o.phone_number, o.address, o.id_card_number, o.emergency_contact, o.status, o.move_in_date, o.move_out_date, o.created_at, o.updated_at, o.occupation 
 FROM users u
@@ -100,4 +157,77 @@ func (q *Queries) ListOccupants(ctx context.Context) ([]ListOccupantsRow, error)
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateOccupantDetail = `-- name: UpdateOccupantDetail :one
+UPDATE occupant_details
+SET name = $2, phone_number = $3, id_card_number = $4, emergency_contact = $5, updated_at = CURRENT_TIMESTAMP
+WHERE user_id = $1 RETURNING id, user_id, name, phone_number, address, id_card_number, emergency_contact, status, move_in_date, move_out_date, created_at, updated_at, occupation
+`
+
+type UpdateOccupantDetailParams struct {
+	UserID           uuid.UUID   `json:"user_id"`
+	Name             string      `json:"name"`
+	PhoneNumber      pgtype.Text `json:"phone_number"`
+	IDCardNumber     pgtype.Text `json:"id_card_number"`
+	EmergencyContact pgtype.Text `json:"emergency_contact"`
+}
+
+func (q *Queries) UpdateOccupantDetail(ctx context.Context, arg UpdateOccupantDetailParams) (OccupantDetail, error) {
+	row := q.db.QueryRow(ctx, updateOccupantDetail,
+		arg.UserID,
+		arg.Name,
+		arg.PhoneNumber,
+		arg.IDCardNumber,
+		arg.EmergencyContact,
+	)
+	var i OccupantDetail
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.PhoneNumber,
+		&i.Address,
+		&i.IDCardNumber,
+		&i.EmergencyContact,
+		&i.Status,
+		&i.MoveInDate,
+		&i.MoveOutDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Occupation,
+	)
+	return i, err
+}
+
+const updateOccupantStatus = `-- name: UpdateOccupantStatus :one
+UPDATE occupant_details
+SET status = $2, updated_at = CURRENT_TIMESTAMP
+WHERE user_id = $1 RETURNING id, user_id, name, phone_number, address, id_card_number, emergency_contact, status, move_in_date, move_out_date, created_at, updated_at, occupation
+`
+
+type UpdateOccupantStatusParams struct {
+	UserID uuid.UUID         `json:"user_id"`
+	Status ProfileStatusEnum `json:"status"`
+}
+
+func (q *Queries) UpdateOccupantStatus(ctx context.Context, arg UpdateOccupantStatusParams) (OccupantDetail, error) {
+	row := q.db.QueryRow(ctx, updateOccupantStatus, arg.UserID, arg.Status)
+	var i OccupantDetail
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.PhoneNumber,
+		&i.Address,
+		&i.IDCardNumber,
+		&i.EmergencyContact,
+		&i.Status,
+		&i.MoveInDate,
+		&i.MoveOutDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Occupation,
+	)
+	return i, err
 }

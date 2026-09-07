@@ -1,8 +1,0 @@
--- AlterTable
-ALTER TABLE `payment` MODIFY `paidDate` DATETIME(3) NULL,
-    MODIFY `paidNominal` DOUBLE NOT NULL DEFAULT 0,
-    MODIFY `status` ENUM('PAID', 'UNPAID', 'NOT_FULLY_PAID') NOT NULL DEFAULT 'UNPAID',
-    MODIFY `paymentMethod` ENUM('TRANSFER', 'QRIS', 'E_WALLET', 'CASH') NULL;
-
--- AlterTable
-ALTER TABLE `room` ADD COLUMN `price` DOUBLE NOT NULL DEFAULT 0;

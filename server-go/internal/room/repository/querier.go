@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -17,6 +18,7 @@ type Querier interface {
 	DeactivateOccupant(ctx context.Context, userID uuid.UUID) error
 	DeleteRoom(ctx context.Context, id uuid.UUID) error
 	GetActiveRoomOccupancy(ctx context.Context, roomID uuid.UUID) (Invoice, error)
+	GetOccupantActiveRoom(ctx context.Context, occupantID pgtype.UUID) (uuid.UUID, error)
 	GetRoom(ctx context.Context, id uuid.UUID) (Room, error)
 	GetRoomDetails(ctx context.Context, id uuid.UUID) (GetRoomDetailsRow, error)
 	GetWaitingReservation(ctx context.Context, roomID uuid.UUID) (Invoice, error)
